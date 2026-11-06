@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Agent</title>
+    <link rel="stylesheet" href="/style.css?v=4">
+</head>
+<body>
+    <header>
+        <h1>File Agent</h1>
+        <button id="reset" title="Start a new conversation">New chat</button>
+    </header>
+
+    <main id="log" aria-live="polite"></main>
+
+    <form id="composer">
+        <textarea id="input" rows="1" placeholder="Ask the agent to read, write, move or delete a file…"></textarea>
+        <button id="send" type="submit">Send</button>
+    </form>
+
+    <script src="/app.js?v=4"></script>
+</body>
+</html>

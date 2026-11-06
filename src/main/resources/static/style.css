@@ -1,0 +1,279 @@
+:root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #262b36;
+    --text: #e6e8ee;
+    --muted: #8b93a7;
+    --accent: #4f8cff;
+    --user: #1e2634;
+    --code-bg: #10131a;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+}
+
+header h1 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+}
+
+#reset {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+#reset:hover {
+    color: var(--text);
+    border-color: var(--accent);
+}
+
+#log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.msg {
+    max-width: 720px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+}
+
+/* Only user text keeps literal whitespace; agent output is rendered HTML. */
+.msg.user {
+    align-self: flex-end;
+    background: var(--user);
+    border: 1px solid var(--border);
+    white-space: pre-wrap;
+}
+
+.msg.agent {
+    align-self: flex-start;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    min-width: 0;
+    /* Preserve the model's spacing, but keep lines wrap-friendly. */
+    white-space: normal;
+    tab-size: 4;
+}
+
+.msg.error {
+    align-self: flex-start;
+    border-color: #7a2e2e;
+    color: #ffb4b4;
+    white-space: pre-wrap;
+}
+
+.msg.agent.streaming::after {
+    content: "▍";
+    color: var(--accent);
+    animation: blink 1s steps(2, start) infinite;
+}
+
+@keyframes blink {
+    to { visibility: hidden; }
+}
+
+/* ---- Rendered markdown ---- */
+
+.msg.agent > :first-child { margin-top: 0; }
+.msg.agent > :last-child { margin-bottom: 0; }
+
+.msg.agent p {
+    margin: 0 0 12px;
+}
+
+.msg.agent h1,
+.msg.agent h2,
+.msg.agent h3,
+.msg.agent h4,
+.msg.agent h5,
+.msg.agent h6 {
+    margin: 18px 0 8px;
+    line-height: 1.3;
+    font-weight: 600;
+}
+
+.msg.agent h1 { font-size: 20px; }
+.msg.agent h2 { font-size: 18px; }
+.msg.agent h3 { font-size: 16px; }
+.msg.agent h4,
+.msg.agent h5,
+.msg.agent h6 { font-size: 15px; }
+
+.msg.agent ul,
+.msg.agent ol {
+    margin: 0 0 12px;
+    padding-left: 24px;
+}
+
+.msg.agent li {
+    margin: 4px 0;
+}
+
+/* Nested list items keep their own indentation. */
+.msg.agent li > ul,
+.msg.agent li > ol {
+    margin: 4px 0 0;
+}
+
+.msg.agent a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.msg.agent a:hover {
+    text-decoration: underline;
+}
+
+.msg.agent strong { font-weight: 600; }
+
+.msg.agent blockquote {
+    margin: 0 0 12px;
+    padding: 6px 12px;
+    border-left: 3px solid var(--border);
+    color: var(--muted);
+}
+
+.msg.agent blockquote p:last-child {
+    margin-bottom: 0;
+}
+
+.msg.agent hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 16px 0;
+}
+
+.msg.agent code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    white-space: pre-wrap;
+}
+
+.msg.agent pre {
+    margin: 0 0 12px;
+    padding: 12px 14px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow-x: auto;
+}
+
+.msg.agent pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 13px;
+    line-height: 1.55;
+    white-space: pre;
+    overflow-wrap: normal;
+}
+
+/* Tables need their own scroll container so narrow bubbles stay aligned. */
+.msg.agent .table-wrap {
+    margin: 0 0 12px;
+    overflow-x: auto;
+}
+
+.msg.agent table {
+    border-collapse: collapse;
+    font-size: 14px;
+    min-width: 100%;
+}
+
+.msg.agent th,
+.msg.agent td {
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.msg.agent th {
+    background: var(--user);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.hint {
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+    margin-top: 40px;
+}
+
+#composer {
+    display: flex;
+    gap: 10px;
+    padding: 14px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+}
+
+#input {
+    flex: 1;
+    resize: none;
+    max-height: 180px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+    outline: none;
+}
+
+#input:focus {
+    border-color: var(--accent);
+}
+
+#send {
+    padding: 0 20px;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+#send:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
