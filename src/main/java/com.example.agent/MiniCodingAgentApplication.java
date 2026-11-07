@@ -16,6 +16,8 @@ import org.springframework.context.annotation.Bean;
 
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
 import java.util.Scanner;
 
 @SpringBootApplication
@@ -45,8 +47,32 @@ public class MiniCodingAgentApplication {
     }
 
     /**
+     * Git access for the *user*, not the model. See {@link GitTools}: nothing here is
+     * exposed as a tool callback, so no prompt-injected file can reach a push.
+     */
+    @Bean
+    GitTools gitTools(@Value("${agent.git.repo:}") String repo,
+                      @Value("${agent.git.auto-push:false}") boolean autoPush,
+                      @Value("${agent.git.allow-force:false}") boolean allowForce,
+                      @Value("${agent.git.branch-allowlist:main}") List<String> branchAllowlist,
+                      @Value("${agent.git.remote:origin}") String remote,
+                      @Value("${agent.git.verify-command:mvn -q -B test}") String verifyCommand)
+            throws Exception {
+        if (repo == null || repo.isBlank()) {
+            // Fall back to the working directory so startup does not fail; the git
+            // commands will simply report that they are not in a repository.
+            repo = Path.of("").toAbsolutePath().toString();
+        }
+        return new GitTools(Path.of(repo), autoPush, allowForce,
+                branchAllowlist, remote, verifyCommand);
+    }
+
+    /**
      * The raw tool callbacks, exposed as a bean so both the REPL and the HTTP
      * controller can wrap them with a per-request {@link LoggingToolCallback}.
+     *
+     * <p>Only {@link FileTools} is registered. Git is deliberately absent: commit
+     * and push are irreversible enough that they stay on the user's side of the line.
      */
     @Bean
     ToolCallbackProvider toolCallbackProvider(FileTools fileTools) {
@@ -74,6 +100,7 @@ public class MiniCodingAgentApplication {
                             - Every turn and tool call is recorded in .agent/activity.log. If the user asks what
                               you did earlier, say what you remember and point them at that log.
                             - Never create test, probe, or placeholder files.
+                            - You cannot run commands or use git. The human handles commits and pushes.
                             """)
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
                 .build();
@@ -91,21 +118,24 @@ public class MiniCodingAgentApplication {
     @Bean
     CommandLineRunner repl(ChatClient chatClient,
                            ToolCallbackProvider tools,
-                           ActivityLog log) {
+                           ActivityLog log,
+                           GitTools git) {
         return args -> {
             String conversationId = "repl";
             ChatClient client = loggedClient(chatClient, tools, log, conversationId);
 
             Scanner in = new Scanner(System.in);
             System.out.println("Mini coding agent ready. Type 'exit' to quit, ':log' to see recent activity.");
+            System.out.println("Git: ':status', ':diff', ':check', ':commit <msg>', ':push <msg>'.");
             while (true) {
                 System.out.print("\nyou> ");
                 if (!in.hasNextLine()) break;
                 String line = in.nextLine();
                 if (line.isBlank()) continue;
                 if (line.equalsIgnoreCase("exit")) break;
-                if (line.equalsIgnoreCase(":log")) {
-                    System.out.println(log.tail(20));
+
+                if (line.trim().startsWith(":")) {
+                    handleCommand(parseCommand(line), log, git);
                     continue;
                 }
 
@@ -129,5 +159,56 @@ public class MiniCodingAgentApplication {
                 System.out.println();
             }
         };
+    }
+
+    /** A parsed {@code :command}, name lowercased and argument untouched. */
+    record Command(String name, String arg) {}
+
+    /**
+     * Splits {@code ":push some message"} into name {@code :push} and argument
+     * {@code "some message"}. Deliberately dumb: no quoting, no escapes, no shell
+     * semantics -- the argument is handed to git as a single argv element later.
+     */
+    static Command parseCommand(String line) {
+        String trimmed = line == null ? "" : line.trim();
+        int space = trimmed.indexOf(' ');
+        if (space < 0) {
+            return new Command(trimmed.toLowerCase(Locale.ROOT), "");
+        }
+        return new Command(
+                trimmed.substring(0, space).toLowerCase(Locale.ROOT),
+                trimmed.substring(space + 1).trim());
+    }
+
+    /**
+     * REPL commands. These are the user's, not the model's: the model has no tool
+     * that can reach them, which is the whole point of the git boundary.
+     */
+    private static void handleCommand(Command command, ActivityLog log, GitTools git) {
+        switch (command.name()) {
+            case ":log" -> System.out.println(log.tail(20));
+            case ":status" -> System.out.println(git.status());
+            case ":diff" -> System.out.println(git.diff());
+            case ":check" -> git.verify();
+            case ":commit" -> {
+                if (command.arg().isEmpty()) {
+                    System.out.println("[git] usage: :commit <message>");
+                } else {
+                    System.out.println(git.commit(command.arg()));
+                    // The tree moved; any earlier verification is now stale.
+                    git.invalidateVerification();
+                }
+            }
+            case ":push" -> {
+                if (command.arg().isEmpty()) {
+                    System.out.println("[git] usage: :push <commit message>");
+                } else {
+                    // Verify -> commit -> push, in that order. A red build stops it.
+                    System.out.println(git.pushVerified(command.arg()));
+                }
+            }
+            default -> System.out.println("[repl] unknown command: " + command.name()
+                    + " (try :log, :status, :diff, :check, :commit, :push)");
+        }
     }
 }
