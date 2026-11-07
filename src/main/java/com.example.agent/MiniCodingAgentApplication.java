@@ -19,10 +19,10 @@ import java.util.Arrays;
 import java.util.Scanner;
 
 @SpringBootApplication
-public class FileAgentApplication {
+public class MiniCodingAgentApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(FileAgentApplication.class, args);
+        SpringApplication.run(MiniCodingAgentApplication.class, args);
     }
 
     @Bean
@@ -97,7 +97,7 @@ public class FileAgentApplication {
             ChatClient client = loggedClient(chatClient, tools, log, conversationId);
 
             Scanner in = new Scanner(System.in);
-            System.out.println("File agent ready. Type 'exit' to quit, ':log' to see recent activity.");
+            System.out.println("Mini coding agent ready. Type 'exit' to quit, ':log' to see recent activity.");
             while (true) {
                 System.out.print("\nyou> ");
                 if (!in.hasNextLine()) break;

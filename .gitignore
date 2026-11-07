@@ -44,3 +44,4 @@ workspace/
 
 ### Mac OS ###
 .DS_Storeapplication-local.properties
+.agent/

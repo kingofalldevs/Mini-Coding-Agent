@@ -3,22 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>File Agent</title>
-    <link rel="stylesheet" href="/style.css?v=4">
+    <title>Mini Coding Agent</title>
+    <link rel="stylesheet" href="/style.css?v=7">
 </head>
 <body>
-    <header>
-        <h1>File Agent</h1>
-        <button id="reset" title="Start a new conversation">New chat</button>
+    <div class="aurora" aria-hidden="true"></div>
+
+    <header class="topbar">
+        <div class="brand">
+            <span class="brand-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 3v5h5"></path>
+                    <path d="M19 8v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7z"></path>
+                </svg>
+            </span>
+            <div class="brand-text">
+                <h1>Mini Coding Agent</h1>
+                <p>read · write · move · delete</p>
+            </div>
+        </div>
+        <div class="topbar-actions">
+            <span class="status-dot" id="status" data-state="idle" title="Idle"></span>
+            <button id="reset" type="button" title="Start a new conversation">New chat</button>
+        </div>
     </header>
 
-    <main id="log" aria-live="polite"></main>
+    <main id="log" aria-live="polite" aria-label="Conversation"></main>
 
-    <form id="composer">
-        <textarea id="input" rows="1" placeholder="Ask the agent to read, write, move or delete a file…"></textarea>
-        <button id="send" type="submit">Send</button>
-    </form>
+    <div class="jump" id="jump" hidden>
+        <button type="button" id="jump-btn" title="Scroll to latest">↓</button>
+    </div>
 
-    <script src="/app.js?v=4"></script>
+    <footer class="composer-wrap">
+        <form id="composer">
+            <textarea id="input" rows="1" placeholder="Ask the agent to read, write, move or delete a file…"
+                      autocomplete="off" spellcheck="true"></textarea>
+            <button id="send" type="submit" title="Send (Enter)" aria-label="Send message">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M4 12h15"></path>
+                    <path d="M13 6l6 6-6 6"></path>
+                </svg>
+            </button>
+        </form>
+        <div class="composer-hint">
+            <span><kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line</span>
+            <span class="composer-hint-right">Markdown supported</span>
+        </div>
+    </footer>
+
+    <script src="/app.js?v=7"></script>
 </body>
 </html>

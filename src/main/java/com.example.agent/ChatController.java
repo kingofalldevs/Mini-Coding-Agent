@@ -59,7 +59,7 @@ public class ChatController {
                 : request.conversationId();
 
         // Per-request client so tool calls are logged against the right conversation.
-        ChatClient client = FileAgentApplication.loggedClient(chatClient, tools, activityLog, conversationId);
+        ChatClient client = MiniCodingAgentApplication.loggedClient(chatClient, tools, activityLog, conversationId);
 
         long started = System.currentTimeMillis();
 

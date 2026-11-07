@@ -1,7 +1,8 @@
-# file-agent
+# mini-coding-agent
 
-A file-management agent built with Spring Boot and Spring AI, backed by DeepSeek. It can inspect,
-create, read, move, and delete files — but only inside a single configured workspace directory.
+A file-management coding agent built with Spring Boot and Spring AI, backed by DeepSeek. It can
+inspect, create, read, move, and delete files — but only inside a single configured workspace
+directory.
 
 It ships with two front ends over the same agent:
 
@@ -21,7 +22,7 @@ Both share the same tools, the same in-memory conversation memory, and the same 
 `src/main/resources/application.properties`:
 
 ```properties
-spring.application.name=file-agent
+spring.application.name=mini-coding-agent
 spring.ai.deepseek.api-key=${DEEPSEEK_API_KEY}
 spring.ai.deepseek.chat.options.model=deepseek-chat
 spring.profiles.active=local
@@ -59,7 +60,7 @@ Startup prints the resolved workspace and the activity-log path:
 ```
 >>> Agent workspace: /path/to/workspace
 >>> Agent activity log: /path/to/workspace/.agent/activity.log
-File agent ready. Type 'exit' to quit, ':log' to see recent activity.
+Mini coding agent ready. Type 'exit' to quit, ':log' to see recent activity.
 
 you>
 ```

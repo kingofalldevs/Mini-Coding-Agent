@@ -1,279 +1,624 @@
+/* ==========================================================================
+   Mini Coding Agent — UI theme
+   Dark-first, one accent, restrained motion. Two-sided conversation:
+   the agent's turns sit left with an avatar gutter, the user's turns sit
+   right so author is readable at a glance.
+   ========================================================================== */
+
 :root {
-    --bg: #0f1115;
-    --panel: #171a21;
-    --border: #262b36;
-    --text: #e6e8ee;
-    --muted: #8b93a7;
-    --accent: #4f8cff;
-    --user: #1e2634;
-    --code-bg: #10131a;
+    --bg: #0b0d12;
+    --bg-glow-1: #1b2b5e;
+    --bg-glow-2: #3b1f4e;
+
+    --surface: rgba(23, 26, 34, 0.72);
+    --surface-solid: #151821;
+    --surface-raised: #1b1f2a;
+
+    --border: rgba(255, 255, 255, 0.07);
+    --border-strong: rgba(255, 255, 255, 0.14);
+
+    --text: #e9ecf3;
+    --text-dim: #a2abc0;
+    --muted: #737d93;
+
+    --accent: #6b8cff;
+    --accent-soft: rgba(107, 140, 255, 0.16);
+    --accent-line: rgba(107, 140, 255, 0.42);
+
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --danger: #ff8080;
+
+    --code-bg: #0e1118;
+
+    --radius-lg: 16px;
+    --radius-md: 12px;
+    --radius-sm: 8px;
+
+    /* User-side fill. Only the user bubble paints a background, so this is
+       intentionally scoped to that side rather than shared. */
+    --bubble-fill: linear-gradient(160deg, rgba(107, 140, 255, 0.17), rgba(143, 107, 255, 0.1));
+
+    /* Content column. Capped so long lines never span the whole monitor. */
+    --shell: 760px;
+
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+    --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
 }
 
-* { box-sizing: border-box; }
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html, body { height: 100%; }
 
 body {
     margin: 0;
-    height: 100vh;
     display: flex;
     flex-direction: column;
     background: var(--bg);
     color: var(--text);
-    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font: 15px/1.65 var(--font);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
 }
 
-header {
+/* Ambient colour wash. Fixed + non-interactive so it never scrolls or grabs clicks. */
+.aurora {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(60ch 40ch at 12% -8%, var(--bg-glow-1), transparent 70%),
+        radial-gradient(52ch 36ch at 92% 4%, var(--bg-glow-2), transparent 72%);
+    opacity: 0.55;
+}
+
+/* ==========================================================================
+   Top bar
+   ========================================================================== */
+
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 20px;
+    gap: 16px;
+    padding: 14px max(20px, calc((100vw - var(--shell)) / 2));
     border-bottom: 1px solid var(--border);
-    background: var(--panel);
+    background: rgba(11, 13, 18, 0.72);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
 }
 
-header h1 {
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.brand-mark {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 auto;
+    border-radius: 10px;
+    background: linear-gradient(150deg, var(--accent), #8f6bff);
+    color: #fff;
+    box-shadow: 0 6px 18px -8px var(--accent);
+}
+
+.brand-mark svg { width: 18px; height: 18px; }
+
+.brand-text h1 {
     margin: 0;
-    font-size: 16px;
-    font-weight: 600;
-    letter-spacing: 0.2px;
+    font-size: 15px;
+    font-weight: 650;
+    letter-spacing: 0.1px;
+}
+
+.brand-text p {
+    margin: 1px 0 0;
+    font-size: 11.5px;
+    color: var(--muted);
+    letter-spacing: 0.3px;
+}
+
+.topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.25s var(--ease), box-shadow 0.25s var(--ease);
+}
+
+.status-dot[data-state="busy"] {
+    background: var(--accent);
+    box-shadow: 0 0 0 4px var(--accent-soft);
+    animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    50% { box-shadow: 0 0 0 7px rgba(107, 140, 255, 0.05); }
 }
 
 #reset {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 13px;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
     background: transparent;
-    color: var(--muted);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 6px 12px;
-    font-size: 13px;
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 550;
     cursor: pointer;
+    transition: color 0.18s, border-color 0.18s, background 0.18s;
 }
 
 #reset:hover {
     color: var(--text);
-    border-color: var(--accent);
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
 }
+
+#reset:focus-visible,
+#jump-btn:focus-visible,
+#send:focus-visible,
+#input:focus-visible {
+    outline: 2px solid var(--accent-line);
+    outline-offset: 2px;
+}
+
+/* ==========================================================================
+   Conversation column
+   ========================================================================== */
 
 #log {
+    position: relative;
+    z-index: 1;
     flex: 1;
     overflow-y: auto;
-    padding: 20px;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+    padding: 28px max(20px, calc((100vw - var(--shell)) / 2)) 8px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
 }
 
-.msg {
-    max-width: 720px;
-    padding: 10px 14px;
-    border-radius: 10px;
+#log::-webkit-scrollbar { width: 10px; }
+#log::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+}
+
+/* ---- Empty state ---- */
+
+.empty {
+    margin: auto;
+    max-width: 520px;
+    text-align: center;
+    padding: 32px 8px;
+    animation: rise 0.5s var(--ease) both;
+}
+
+.empty-title {
+    margin: 0 0 6px;
+    font-size: 22px;
+    font-weight: 620;
+    letter-spacing: -0.2px;
+}
+
+.empty-sub {
+    margin: 0 0 22px;
+    color: var(--muted);
+    font-size: 13.5px;
+}
+
+.starters {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+}
+
+.starter {
+    padding: 8px 14px;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    transition: color 0.18s, border-color 0.18s, background 0.18s, transform 0.18s var(--ease);
+}
+
+.starter:hover {
+    color: var(--text);
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+    transform: translateY(-1px);
+}
+
+/* ---- Message rows ----------------------------------------------------
+   Two sides. Agent rows run left-to-right with an avatar in a reserved
+   gutter; user rows reverse direction so the bubble lands against the
+   right edge and never reserves space for an avatar it does not have. */
+
+.turn {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
+    animation: rise 0.32s var(--ease) both;
+}
+
+.turn.agent {
+    flex-direction: row;
+    justify-content: flex-start;
+    padding-right: 38px;
+}
+
+.turn.user {
+    flex-direction: row;
+    justify-content: flex-end;
+    padding-left: 38px;
+}
+
+@keyframes rise {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
+
+.avatar {
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    margin-top: 2px;
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(150deg, var(--accent), #8f6bff);
+    box-shadow: 0 5px 16px -9px var(--accent);
+}
+
+.bubble {
+    position: relative;
+    min-width: 0;
+    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    background: var(--surface);
     word-wrap: break-word;
     overflow-wrap: anywhere;
 }
 
-/* Only user text keeps literal whitespace; agent output is rendered HTML. */
-.msg.user {
-    align-self: flex-end;
-    background: var(--user);
-    border: 1px solid var(--border);
-    white-space: pre-wrap;
-}
-
-.msg.agent {
-    align-self: flex-start;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    min-width: 0;
-    /* Preserve the model's spacing, but keep lines wrap-friendly. */
+/* Agent bubble: fills the remaining row width, capped at a reading measure.
+   Sits directly on the page — no fill, no border, no blur — so the agent's
+   prose reads as plain text and the user's filled bubble is the only
+   shape on the canvas. */
+.turn.agent .bubble {
+    flex: 1 1 auto;
+    max-width: min(100%, 70ch);
+    border-top-left-radius: 5px;
+    background: none;
+    border: none;
     white-space: normal;
     tab-size: 4;
 }
 
-.msg.error {
-    align-self: flex-start;
-    border-color: #7a2e2e;
-    color: #ffb4b4;
+/* User bubble: hugs its content and sits against the right edge. */
+.turn.user .bubble {
+    flex: 0 1 auto;
+    max-width: min(100%, 62ch);
+    background: var(--bubble-fill);
+    border-color: var(--accent-line);
+    border-top-right-radius: 5px;
     white-space: pre-wrap;
 }
 
-.msg.agent.streaming::after {
-    content: "▍";
-    color: var(--accent);
-    animation: blink 1s steps(2, start) infinite;
+.bubble.error {
+    background: rgba(255, 90, 90, 0.08);
+    border-color: rgba(255, 128, 128, 0.4);
+    color: var(--danger);
+    white-space: pre-wrap;
 }
 
-@keyframes blink {
+/* Blinking caret while tokens stream in. */
+.bubble.streaming::after {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 1.05em;
+    margin-left: 2px;
+    vertical-align: text-bottom;
+    border-radius: 2px;
+    background: var(--accent);
+    animation: caret 1s steps(2, start) infinite;
+}
+
+@keyframes caret {
     to { visibility: hidden; }
 }
 
-/* ---- Rendered markdown ---- */
+/* ==========================================================================
+   Rendered markdown
+   ========================================================================== */
 
-.msg.agent > :first-child { margin-top: 0; }
-.msg.agent > :last-child { margin-bottom: 0; }
+.bubble > :first-child { margin-top: 0; }
+.bubble > :last-child { margin-bottom: 0; }
 
-.msg.agent p {
-    margin: 0 0 12px;
-}
+.bubble p { margin: 0 0 12px; }
 
-.msg.agent h1,
-.msg.agent h2,
-.msg.agent h3,
-.msg.agent h4,
-.msg.agent h5,
-.msg.agent h6 {
-    margin: 18px 0 8px;
+.bubble h1,
+.bubble h2,
+.bubble h3,
+.bubble h4,
+.bubble h5,
+.bubble h6 {
+    margin: 20px 0 9px;
     line-height: 1.3;
-    font-weight: 600;
+    font-weight: 640;
+    letter-spacing: -0.15px;
 }
 
-.msg.agent h1 { font-size: 20px; }
-.msg.agent h2 { font-size: 18px; }
-.msg.agent h3 { font-size: 16px; }
-.msg.agent h4,
-.msg.agent h5,
-.msg.agent h6 { font-size: 15px; }
+.bubble h1 { font-size: 21px; }
+.bubble h2 { font-size: 18px; }
+.bubble h3 { font-size: 16px; }
+.bubble h4, .bubble h5, .bubble h6 { font-size: 14.5px; }
 
-.msg.agent ul,
-.msg.agent ol {
-    margin: 0 0 12px;
-    padding-left: 24px;
-}
+.bubble ul,
+.bubble ol { margin: 0 0 12px; padding-left: 22px; }
 
-.msg.agent li {
-    margin: 4px 0;
-}
+.bubble li { margin: 5px 0; }
+.bubble li::marker { color: var(--muted); }
 
-/* Nested list items keep their own indentation. */
-.msg.agent li > ul,
-.msg.agent li > ol {
-    margin: 4px 0 0;
-}
+/* Nested lists keep their own indent instead of collapsing to the parent. */
+.bubble li > ul,
+.bubble li > ol { margin: 5px 0 0; }
 
-.msg.agent a {
+.bubble a {
     color: var(--accent);
     text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.16s;
 }
 
-.msg.agent a:hover {
-    text-decoration: underline;
-}
+.bubble a:hover { border-bottom-color: var(--accent-line); }
 
-.msg.agent strong { font-weight: 600; }
+.bubble strong { font-weight: 640; }
 
-.msg.agent blockquote {
+.bubble blockquote {
     margin: 0 0 12px;
-    padding: 6px 12px;
-    border-left: 3px solid var(--border);
-    color: var(--muted);
+    padding: 2px 0 2px 14px;
+    border-left: 2px solid var(--accent-line);
+    color: var(--text-dim);
 }
 
-.msg.agent blockquote p:last-child {
-    margin-bottom: 0;
-}
+.bubble blockquote p:last-child { margin-bottom: 0; }
 
-.msg.agent hr {
+.bubble hr {
     border: none;
     border-top: 1px solid var(--border);
-    margin: 16px 0;
+    margin: 18px 0;
 }
 
-.msg.agent code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 13px;
+.bubble code {
+    font-family: var(--mono);
+    font-size: 12.8px;
     background: var(--code-bg);
     border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 1px 5px;
+    border-radius: 5px;
+    padding: 1.5px 5px;
+    /* Inline paths must wrap rather than push the bubble wide. */
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 
-.msg.agent pre {
-    margin: 0 0 12px;
-    padding: 12px 14px;
+.bubble pre {
+    position: relative;
+    margin: 0 0 14px;
+    padding: 13px 15px;
     background: var(--code-bg);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     overflow-x: auto;
 }
 
-.msg.agent pre code {
+.bubble pre code {
     background: none;
     border: none;
+    border-radius: 0;
     padding: 0;
-    font-size: 13px;
-    line-height: 1.55;
+    font-size: 12.8px;
+    line-height: 1.6;
     white-space: pre;
     overflow-wrap: normal;
 }
 
-/* Tables need their own scroll container so narrow bubbles stay aligned. */
-.msg.agent .table-wrap {
-    margin: 0 0 12px;
+/* Tables need their own scroller so a narrow bubble never misaligns rows. */
+.bubble .table-wrap {
+    margin: 0 0 14px;
     overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
 }
 
-.msg.agent table {
+.bubble table {
     border-collapse: collapse;
-    font-size: 14px;
+    font-size: 13.5px;
     min-width: 100%;
 }
 
-.msg.agent th,
-.msg.agent td {
-    border: 1px solid var(--border);
-    padding: 6px 10px;
+.bubble th,
+.bubble td {
+    padding: 8px 12px;
     text-align: left;
     vertical-align: top;
+    border-bottom: 1px solid var(--border);
 }
 
-.msg.agent th {
-    background: var(--user);
-    font-weight: 600;
+.bubble th {
+    background: rgba(255, 255, 255, 0.035);
+    font-weight: 620;
+    color: var(--text);
     white-space: nowrap;
 }
 
-.hint {
-    color: var(--muted);
-    font-size: 13px;
-    text-align: center;
-    margin-top: 40px;
+.bubble tr:last-child td { border-bottom: none; }
+
+/* ==========================================================================
+   Scroll-to-latest affordance
+   ========================================================================== */
+
+.jump {
+    position: fixed;
+    left: 50%;
+    bottom: 132px;
+    transform: translateX(-50%);
+    z-index: 9;
+}
+
+.jump[hidden] { display: none; }
+
+#jump-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid var(--border-strong);
+    background: var(--surface-solid);
+    color: var(--text-dim);
+    font-size: 15px;
+    cursor: pointer;
+    box-shadow: 0 10px 24px -12px #000;
+    transition: color 0.18s, border-color 0.18s;
+}
+
+#jump-btn:hover { color: var(--text); border-color: var(--accent-line); }
+
+/* ==========================================================================
+   Composer
+   ========================================================================== */
+
+.composer-wrap {
+    position: relative;
+    z-index: 1;
+    padding: 10px max(20px, calc((100vw - var(--shell)) / 2)) 18px;
 }
 
 #composer {
     display: flex;
+    align-items: flex-end;
     gap: 10px;
-    padding: 14px 20px;
-    border-top: 1px solid var(--border);
-    background: var(--panel);
+    padding: 8px 8px 8px 4px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    background: var(--surface-solid);
+    box-shadow: 0 18px 40px -28px #000;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+#composer:focus-within {
+    border-color: var(--accent-line);
+    box-shadow: 0 18px 44px -26px var(--accent);
 }
 
 #input {
     flex: 1;
-    resize: none;
+    min-height: 40px;
     max-height: 180px;
-    padding: 10px 12px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    background: var(--bg);
+    padding: 9px 12px;
+    border: none;
+    background: transparent;
     color: var(--text);
     font: inherit;
+    line-height: 1.55;
+    resize: none;
     outline: none;
 }
 
-#input:focus {
-    border-color: var(--accent);
-}
+#input::placeholder { color: var(--muted); }
 
 #send {
-    padding: 0 20px;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
     border: none;
-    border-radius: 8px;
+    border-radius: 10px;
     background: var(--accent);
     color: #fff;
-    font: inherit;
-    font-weight: 600;
     cursor: pointer;
+    transition: filter 0.18s, opacity 0.18s, transform 0.18s var(--ease);
 }
 
-#send:disabled {
-    opacity: 0.5;
-    cursor: default;
+#send svg { width: 17px; height: 17px; }
+
+#send:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
+#send:disabled { opacity: 0.42; cursor: default; }
+
+.composer-hint {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 6px 0;
+    color: var(--muted);
+    font-size: 11.5px;
+}
+
+.composer-hint kbd {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    padding: 1px 5px;
+    border: 1px solid var(--border-strong);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-dim);
+}
+
+/* ==========================================================================
+   Narrow screens
+   ========================================================================== */
+
+@media (max-width: 640px) {
+    .topbar { padding: 12px 16px; }
+    .brand-text p { display: none; }
+    #log { padding: 20px 16px 4px; gap: 12px; }
+    .composer-wrap { padding: 8px 12px 14px; }
+    .bubble { padding: 11px 13px; }
+    .turn.agent { padding-right: 0; }
+    .turn.user { padding-left: 0; }
+    .turn.agent .bubble { max-width: 100%; }
+    .turn.user .bubble { max-width: 100%; }
+    .avatar { display: none; }
+    .composer-hint-right { display: none; }
 }

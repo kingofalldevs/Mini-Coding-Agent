@@ -1,46 +1,135 @@
-const log = document.getElementById('log');
+/* ==========================================================================
+   Mini Coding Agent — frontend
+   Streams SSE frames from /api/chat and renders incremental markdown.
+   ========================================================================== */
+
+const logEl = document.getElementById('log');
 const form = document.getElementById('composer');
 const input = document.getElementById('input');
-const send = document.getElementById('send');
-const reset = document.getElementById('reset');
+const sendBtn = document.getElementById('send');
+const resetBtn = document.getElementById('reset');
+const statusDot = document.getElementById('status');
+const jumpWrap = document.getElementById('jump');
+const jumpBtn = document.getElementById('jump-btn');
 
 let conversationId = null;
 let busy = false;
+/** True while the user is parked at the bottom; disables autoscroll when they scroll up to read. */
+let pinned = true;
 
-function addMessage(role, text) {
+/* ==========================================================================
+   Small helpers
+   ========================================================================== */
+
+function setBusy(value) {
+    busy = value;
+    sendBtn.disabled = value;
+    statusDot.dataset.state = value ? 'busy' : 'idle';
+    statusDot.title = value ? 'Thinking…' : 'Idle';
+}
+
+function nearBottom() {
+    return logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 80;
+}
+
+function scrollToBottom(force) {
+    if (force || pinned) logEl.scrollTop = logEl.scrollHeight;
+}
+
+/** Autoscroll only when pinned, and surface a jump button when the user has scrolled away. */
+logEl.addEventListener('scroll', () => {
+    pinned = nearBottom();
+    jumpWrap.hidden = pinned;
+});
+
+jumpBtn.addEventListener('click', () => {
+    pinned = true;
+    jumpWrap.hidden = true;
+    scrollToBottom(true);
+});
+
+/* ==========================================================================
+   Empty state
+   ========================================================================== */
+
+const STARTERS = [
+    'List the files in the workspace',
+    'Create a notes file and write a summary',
+    'Read README.md and explain it'
+];
+
+function showEmptyState() {
     const el = document.createElement('div');
-    el.className = 'msg ' + role;
-    if (role === 'agent') {
-        el.innerHTML = renderMarkdown(text);
-    } else {
-        el.textContent = text;
+    el.className = 'empty';
+    el.id = 'empty';
+
+    const title = document.createElement('p');
+    title.className = 'empty-title';
+    title.textContent = 'What should I do with your files?';
+
+    const sub = document.createElement('p');
+    sub.className = 'empty-sub';
+    sub.textContent = 'Read, create, move or delete — the agent does the work and logs every step.';
+
+    const starters = document.createElement('div');
+    starters.className = 'starters';
+    for (const text of STARTERS) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'starter';
+        b.textContent = text;
+        b.addEventListener('click', () => {
+            input.value = text;
+            input.focus();
+            autosize();
+        });
+        starters.appendChild(b);
     }
-    log.appendChild(el);
-    log.scrollTop = log.scrollHeight;
-    return el;
+
+    el.append(title, sub, starters);
+    logEl.appendChild(el);
 }
 
-function showHint() {
-    const el = document.createElement('p');
-    el.className = 'hint';
-    el.id = 'hint';
-    el.textContent = 'No conversation yet. Ask something to get started.';
-    log.appendChild(el);
+function clearEmptyState() {
+    document.getElementById('empty')?.remove();
 }
 
-showHint();
+/* ==========================================================================
+   Message rendering
+   ========================================================================== */
 
-function clearHint() {
-    const hint = document.getElementById('hint');
-    if (hint) hint.remove();
+const AGENT_MARK = 'A';
+
+function addTurn(role, text) {
+    const turn = document.createElement('div');
+    turn.className = 'turn ' + role;
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+
+    if (role === 'agent') {
+        const avatar = document.createElement('div');
+        avatar.className = 'avatar';
+        avatar.textContent = AGENT_MARK;
+        turn.appendChild(avatar);
+        bubble.innerHTML = renderMarkdown(text);
+    } else {
+        bubble.textContent = text;
+    }
+
+    turn.appendChild(bubble);
+    logEl.appendChild(turn);
+    scrollToBottom();
+
+    return bubble;
 }
 
-/* ---------------------------------------------------------------------------
- * Minimal Markdown renderer.
- * Input is escaped first, so model output can never inject HTML.
- * Supports: fenced code, headings, hr, blockquote, ordered/unordered lists,
- * tables, paragraphs, bold/italic/strikethrough, inline code and links.
- * ------------------------------------------------------------------------- */
+/* ==========================================================================
+   Minimal Markdown renderer
+   Input is escaped first, so model output can never inject HTML.
+   Supports: fenced code, headings, hr, blockquote, ordered/unordered lists,
+   tables, paragraphs, bold/italic/strikethrough, inline code and links.
+   ========================================================================== */
 
 function escapeHtml(s) {
     return s
@@ -204,45 +293,15 @@ function renderMarkdown(src) {
     return html.join('\n');
 }
 
-/* ---------------------------------------------------------------------------
- * Event wiring
- * ------------------------------------------------------------------------- */
+/* ==========================================================================
+   SSE parsing
+   Spring's encoder drops whitespace-only values, so each chunk arrives as
+   JSON: {"t":"..."} for text (whitespace survives escaping), {"nl":n} for runs
+   of line breaks, and {"cid":"..."} for the conversation id. Frames are
+   separated by a blank line. A "\r\n" can straddle two reads, so a lone
+   trailing "\r" is held back until its partner arrives.
+   ========================================================================== */
 
-reset.addEventListener('click', () => {
-    conversationId = null;
-    log.innerHTML = '';
-    showHint();
-    input.focus();
-});
-
-// Grow the textarea with its content, up to the CSS max-height.
-input.addEventListener('input', () => {
-    input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 180) + 'px';
-});
-
-input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        form.requestSubmit();
-    }
-});
-
-/* Parse an SSE stream and hand each event's raw data to onData.
- *
- * Per the SSE spec, multiple `data:` lines inside one event are joined with
- * "\n". Spring's SSE encoder also turns newlines inside a value into extra
- * `data:` lines, and it drops values that are whitespace-only -- which is how
- * a chunk consisting of a single space between two words used to disappear.
- * The server therefore sends each chunk as JSON: {"t":"..."} for text (so any
- * whitespace is escaped and survives the wire) and {"nl":n} for runs of line
- * breaks. Frames are separated by "\n\n" or "\r\n\r\n".
- *
- * Note: a "\r\n" can be split across two network reads, leaving a trailing
- * "\r" in the buffer and the "\n" at the head of the next chunk. The buffer is
- * therefore normalised only up to its last complete line, and a lone trailing
- * "\r" is held back until its partner arrives.
- */
 async function consumeSse(response, onData) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -252,7 +311,6 @@ async function consumeSse(response, onData) {
         const dataLines = [];
         for (const line of frame.split('\n')) {
             if (!line.startsWith('data:')) continue;
-            // Spec: strip a single leading space after "data:".
             dataLines.push(line.slice(5).replace(/^ /, ''));
         }
         if (dataLines.length) onData(dataLines.join('\n'));
@@ -260,7 +318,6 @@ async function consumeSse(response, onData) {
 
     const normalise = (chunk) => {
         let s = chunk.replace(/\r\n/g, '\n');
-        // Hold back a trailing "\r" that may be the first half of "\r\n".
         if (s.endsWith('\r')) s = s.slice(0, -1);
         return s;
     };
@@ -272,35 +329,60 @@ async function consumeSse(response, onData) {
 
         const frames = buffer.split('\n\n');
         buffer = frames.pop();
-
         for (const frame of frames) drain(frame);
     }
 
-    // Flush any final frame that arrived without a trailing blank line.
     buffer = normalise(buffer.replace(/\r$/, '\n'));
     if (buffer.trim()) drain(buffer);
 }
+
+/* ==========================================================================
+   Composer behaviour
+   ========================================================================== */
+
+function autosize() {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 180) + 'px';
+}
+
+input.addEventListener('input', autosize);
+
+input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        form.requestSubmit();
+    }
+});
+
+resetBtn.addEventListener('click', () => {
+    conversationId = null;
+    logEl.innerHTML = '';
+    pinned = true;
+    jumpWrap.hidden = true;
+    showEmptyState();
+    input.focus();
+});
 
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const message = input.value.trim();
     if (!message || busy) return;
 
-    busy = true;
-    send.disabled = true;
-    clearHint();
+    setBusy(true);
+    pinned = true;
+    clearEmptyState();
 
-    addMessage('user', message);
+    addTurn('user', message);
     input.value = '';
-    input.style.height = 'auto';
+    autosize();
 
-    const agentEl = addMessage('agent', '');
-    agentEl.classList.add('streaming');
+    const bubble = addTurn('agent', '');
+    bubble.classList.add('streaming');
     let raw = '';
 
     const paint = () => {
-        agentEl.innerHTML = renderMarkdown(raw);
-        log.scrollTop = log.scrollHeight;
+        bubble.innerHTML = renderMarkdown(raw);
+        scrollToBottom();
     };
 
     try {
@@ -318,7 +400,7 @@ form.addEventListener('submit', async (e) => {
             let frame;
             try {
                 frame = JSON.parse(data);
-            } catch (err) {
+            } catch {
                 // Fall back to raw text if the server ever sends non-JSON.
                 raw += data;
                 paint();
@@ -340,15 +422,21 @@ form.addEventListener('submit', async (e) => {
         });
 
         if (!raw.trim()) {
-            agentEl.textContent = '(no response)';
+            bubble.textContent = '(no response)';
         }
     } catch (err) {
-        agentEl.classList.add('error');
-        agentEl.textContent = 'Request failed: ' + err.message;
+        bubble.classList.add('error');
+        bubble.textContent = 'Request failed: ' + err.message;
     } finally {
-        agentEl.classList.remove('streaming');
-        busy = false;
-        send.disabled = false;
+        bubble.classList.remove('streaming');
+        setBusy(false);
         input.focus();
     }
 });
+
+/* ==========================================================================
+   Boot
+   ========================================================================== */
+
+showEmptyState();
+input.focus();
