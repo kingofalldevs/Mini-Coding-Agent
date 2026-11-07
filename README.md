@@ -1,7 +1,7 @@
 # mini-coding-agent
 
-A file-management coding agent built with Spring Boot and Spring AI, backed by DeepSeek. It can
-inspect, create, read, move, and delete files — but only inside a single configured workspace
+A file-management coding agent built with Spring Boot 3.5 and Spring AI 1.1, backed by DeepSeek. It
+can inspect, create, read, move, and delete files — but only inside a single configured workspace
 directory.
 
 It ships with two front ends over the same agent:
@@ -49,9 +49,9 @@ agent.git.verify-command=mvn -q -B test
 
 | Property | Meaning |
 | --- | --- |
-| `agent.workspace` | The only directory the agent can touch. Every file path is resolved relative to it and rejected if it escapes. |
+| `agent.workspace` | The only directory the agent can touch. Every file path is resolved relative to it and rejected if it escapes. Defaults to the working directory if `/workspace` is `.` and it does not exist. |
 | `spring.ai.deepseek.api-key` | Supplied via the `DEEPSEEK_API_KEY` environment variable, or an untracked `application-local.properties`. |
-| `agent.git.repo` | The repository the `:status`/`:diff`/`:check`/`:commit`/`:push` commands act on. Keep it the source tree; `agent.workspace` stays the model's sandbox. |
+| `agent.git.repo` | The repository the `:status`/`:diff`/`:check`/`:commit`/`:push` commands act on. Keep it the source tree; `agent.workspace` stays the model's sandbox. If blank, the git commands fall back to the working directory and report "not a git repository". |
 | `agent.git.auto-push` | Reserved for unattended push. Off by default; nothing pushes without a `:push`. |
 | `agent.git.allow-force` | Force-push is refused unless this is `true`; when enabled it uses `--force-with-lease`, never bare `--force`. |
 | `agent.git.branch-allowlist` | Branches that may be pushed. Anything else is refused. |
@@ -64,6 +64,12 @@ it, along with `target/` and the `.agent/` log directory.
 
 `server.address=127.0.0.1` keeps the HTTP server on loopback. That matters: anyone who can reach the
 port can drive the agent, and the agent can write and delete files.
+
+### Choose a real sandbox
+
+`agent.workspace` must exist and must **not** be the project's own source tree if you care about the
+code. The startup banner prints the resolved root; if it points at this repository, the model can
+rewrite `README.md`, `pom.xml`, and everything under `src/` within its guards.
 
 ## Run
 
@@ -87,6 +93,9 @@ Git: ':status', ':diff', ':check', ':commit <msg>', ':push <msg>'.
 you>
 ```
 
+If `agent.git.repo` is not a git repository, a `>>> WARN: ... is not a git repository` line is
+printed instead of the git banner, and the git commands report errors until it is one.
+
 Then open <http://127.0.0.1:8080/> for the browser UI, or stay in the terminal.
 
 ### Terminal REPL
@@ -103,14 +112,22 @@ memory for the life of the process, so follow-up messages like "now rename that 
 | `:commit <message>` | `git add -A` + `git commit`. Local only. |
 | `:push <message>` | **Verify → commit → push.** If the build is red, nothing is committed and nothing is pushed. |
 
+Parsing is deliberately dumb: the command name is lowercased and everything after the first space
+is the argument, verbatim — no quoting, no escapes, no shell semantics. `:push` and `:commit`
+without a message print a usage line instead of running git. An unknown `:command` prints the list
+of valid ones.
+
 ### Web UI
 
 `index.html`, `app.js`, and `style.css` are static resources served at `/`. The page posts to
 `/api/chat` and renders the streamed reply with a small built-in Markdown renderer (input is escaped
-first, so model output cannot inject HTML). "New chat" resets the conversation id.
+first, so model output cannot inject HTML). "New chat" resets the conversation id. Headings, lists,
+tables, block quotes, fenced code, inline code, links, and bold/italic/strikethrough are supported;
+autoscroll pauses when you scroll up and offers a "jump to latest" button.
 
 `POST /api/chat` takes `{"message": "...", "conversationId": "..."}` — omit `conversationId` on the
-first turn. It responds with `text/event-stream`, where each event's data is a JSON object:
+first turn. A blank message returns a single `{"t":"Error: message must not be blank."}` event. It
+responds with `text/event-stream`, where each event's data is a JSON object:
 
 | Payload | Meaning |
 | --- | --- |
@@ -121,14 +138,15 @@ first turn. It responds with `text/event-stream`, where each event's data is a J
 The web UI has no git commands: `:push` is terminal-only, so a browser session cannot reach a push.
 
 Turn and tool records are appended to the activity log when the stream completes, errors, or is
-cancelled.
+cancelled (`doFinally`), so an abandoned browser tab still leaves a trace.
 
 ## What the agent can do
 
 The model has exactly **five tools**, all defined in `FileTools` and all scoped to the workspace
 root. There is no additional capability beyond these: no shell, no code execution, no network
 access, no web fetch, no git, and no way to read or write anything outside `agent.workspace`. Those
-five tools are the complete tool surface.
+five tools are the complete tool surface — `ReplCommandTest` asserts the registered tool names are
+exactly these five and that none mentions "git".
 
 All paths are relative to the workspace root.
 
@@ -145,15 +163,23 @@ All paths are relative to the workspace root.
 The workspace root is resolved with `toRealPath()` at startup, and every requested path is
 normalized against it. Guards in place:
 
-- **Traversal** — `..` segments that resolve outside the root are rejected before any I/O.
+- **Traversal** — `..` segments that resolve outside the root are rejected before any I/O, as are
+  absolute paths pointing elsewhere.
 - **Symlink escape** — the nearest existing ancestor of a path is resolved for real, so a symlinked
   directory inside the workspace cannot be used to reach outside it. Directories are re-checked
   after creation.
-- **Size limits** — reads over 256 KB are refused; listings are capped in both depth and count.
+- **Size limits** — reads over 256 KB are refused; listings are capped in both depth (8) and count
+  (200).
 - **No clobbering** — `moveFile` refuses an existing destination.
 
 Failures are returned to the model as `Error: ...` strings rather than thrown, so the agent can
-recover and explain itself instead of crashing the REPL.
+recover and explain itself instead of crashing the REPL. The one exception is a logging wrapper,
+which records the failure and rethrows so the error still reaches the model.
+
+The system prompt (`MiniCodingAgentApplication`) reinforces the same discipline: list before
+assuming a file is missing, read before rewriting, reuse the same path when modifying, give files a
+sensible extension, never create probe or placeholder files, confirm which file was written, and
+state plainly that the model cannot run commands or use git.
 
 ## Git: verify, commit, push
 
@@ -176,12 +202,17 @@ Safety properties of the implementation:
 | Rule | Reason |
 | --- | --- |
 | `ProcessBuilder` with an argv list; no `bash -c` | Commit messages, branch names, and file names cannot inject `;`, `\|`, `$(...)`, or redirection. `git commit -m <msg>` passes the message as one argument. |
+| The verify command is split on whitespace, argv-only | No shell, so the gate cannot be a pipeline; a blank command counts as *failed*, never as passed. |
 | Verify runs **before** the commit in `:push` | A red build leaves the working tree as you left it, rather than half-committed. |
 | `isVerified()` is invalidated by every commit and every `:commit` | A stale pass can never authorise a later push. |
 | Explicit ref: `git push <remote> <branch>` | Never bare `git push`; never `--force` unless enabled, and then only `--force-with-lease`. |
 | Branch allowlist | Pushing to an unexpected branch is refused before the network is touched. |
 | `GIT_TERMINAL_PROMPT=0` | A missing credential fails fast instead of hanging the REPL on a username prompt. |
-| Every command timed out | 120 s for git, 600 s for the verify command; captured output is capped at 8 KB. |
+| Every command timed out | 15–60 s for queries and commits, 120 s for git, 600 s for the verify command; captured output is capped at 8 KB. |
+
+Git has its own switching path: `GitTools` is constructed from `agent.git.*` (`auto-push` is read
+and reported at startup but not wired to a trigger — see [Notes](#notes)). The class is not
+thread-safe by design; it is driven from the single REPL thread.
 
 ### Credentials
 
@@ -217,7 +248,8 @@ them in the audit trail, add a `log.git(...)` sink alongside `turn` and `toolCal
 Both files live under `.agent/` because `listFiles` hides dot-prefixed path segments, so they never
 clutter the agent's view of the workspace, and no tool can target them. `.agent/` is listed in
 `.gitignore`, so the logs stay local. Write failures degrade to a stderr warning rather than
-breaking a conversation.
+breaking a conversation. Fields are capped at 600 characters; the Markdown transcript is appended to,
+never rewritten (a header is written only on creation).
 
 See [ACTIVITY_LOG.md](ACTIVITY_LOG.md) for the record format, field meanings, and design rationale.
 
@@ -243,7 +275,12 @@ src/test/java/com.example.agent/
   FileToolsTest.java               # traversal, symlink, limit, and overwrite tests
   GitToolsTest.java                # verify gate, no-shell commit, ref/allowlist behaviour
   ActivityLogTest.java             # JSONL validity, escaping, truncation, tail
+  ReplCommandTest.java             # :command parsing and the five-tool surface
 ```
+
+Note that the source packages live in directories named `com.example.agent` (dots, not slashes),
+which is legal on the filesystem but unusual; Maven still resolves them because the package
+declarations are what the compiler uses.
 
 ## Tests
 
@@ -253,23 +290,33 @@ mvn clean test
 
 - `FileToolsTest` runs against JUnit's `@TempDir` and covers path traversal (including absolute
   paths), symlink escapes, missing files, overwrite semantics, the read-size guard, listing depth
-  and entry caps, and delete/move behavior. Symlink tests skip themselves on filesystems that do not
-  support symbolic links.
-- `GitToolsTest` builds a throwaway repository per test: it asserts a push is refused before any
-  verification, refused when the verify command fails, refused for a branch outside the allowlist,
-  and that a commit message containing `;` and `$(...)` stays literal (no file is created and the
-  message is recorded verbatim). Tests skip when `git` is not installed.
-- `ActivityLogTest` asserts one parseable JSON object per event, that newlines and quotes cannot break
-  or forge a record, that fields are truncated, and that `tail` returns the most recent records.
+  and entry caps (including that `.agent/` is hidden), and delete/move behavior including refusal to
+  clobber or delete a directory. Symlink tests skip themselves on filesystems that do not support
+  symbolic links.
+- `GitToolsTest` builds a throwaway repository per test (temp dir only, no network, no credentials):
+  it asserts a push is refused before any verification, refused when the verify command fails,
+  refused for a branch outside the allowlist, that `:push` runs the build before committing, that a
+  commit message containing `;` and `$(...)` stays literal (no file is created and the message is
+  recorded verbatim), and that the verify command splits into argv correctly. Tests skip when `git`
+  is not installed.
+- `ActivityLogTest` asserts one parseable JSON object per event, that newlines and quotes cannot
+  break or forge a record, that fields are truncated, that both sinks are created under `.agent/`,
+  that the transcript is appended to rather than rewritten, and that `tail` returns the most recent
+  records.
+- `ReplCommandTest` asserts `:command` parsing (bare commands, arguments, whitespace trimming,
+  lowercase names with untouched arguments, hostile arguments staying literal, `null`) and that the
+  registered tool surface is exactly the five file tools with no git tool.
 
 ## Notes
 
 - The app starts an embedded HTTP server for the web UI. `server.address=127.0.0.1` is deliberate —
   binding to `0.0.0.0` would put a file-writing agent on your network.
-- The system prompt in `MiniCodingAgentApplication` reinforces workspace discipline: list before
-  assuming a file is missing, read before rewriting, reuse the same path when modifying, never
-  create probe or placeholder files, and states that the model cannot run commands or use git.
 - Conversation memory is in-process and unbounded in lifetime: restarting the app forgets every
-  conversation, and the web UI's conversation id becomes meaningless.
-- `agent.git.auto-push` is accepted but not wired to an automatic trigger; it is the documented
-  extension point if you later want a push after every successful turn.
+  conversation, and the web UI's conversation id becomes meaningless. The REPL uses the fixed id
+  `repl`; the web UI gets a UUID per new chat.
+- `agent.git.auto-push` is accepted, printed at startup, and exposed via `GitTools.isAutoPush()`, but
+  is not wired to an automatic trigger. It is the documented extension point if you later want a
+  push after every successful turn.
+- Tool calls produce no content deltas, so they never appear in the streamed reply — the activity
+  log is where you see them. The model's prose and the log can disagree; the log is written by code
+  and wins.
